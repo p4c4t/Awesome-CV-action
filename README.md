@@ -14,12 +14,16 @@ Nowaday a few open source project help to support that pain from an edition pers
 
 **This how i came up with the idea of automating the resume exactly like a software!**
 
-A simple pipeline support 4 steps for you:
+A simple pipeline supports 6 steps for you:
 
-1. compile your resume into a .pdf
-2. create a git tag and a github release
-3. Upload the resume as a pdf to the github release.
-4. And voila ! You will have an up to date resume accessible from anywhere through a simple url like : [YOUR RESUME REPO URL]/releases/download/latest/resume.pdf
+1. **Validate** your LaTeX files with chktex to catch common errors
+2. **Process** all include files from `resume/` directory and create a consolidated `.tex` artifact
+3. **Compile** your resume into a .pdf
+4. **Create** a git tag and a github release
+5. **Upload** both the resume PDF and the .tex artifact to the github release
+6. **Access** your files from anywhere through simple URLs like:
+   - PDF: [YOUR RESUME REPO URL]/releases/download/latest/resume.pdf
+   - TEX: [YOUR RESUME REPO URL]/releases/download/latest/resume_artifact.tex
 
 ## 🚀 Usage
 
@@ -72,6 +76,35 @@ jobs:
 ```
 
 A simple example accessible on my repository: https://github.com/olivierodo/Awesome-CV
+
+## ✨ Enhanced Features
+
+### LaTeX Validation with chktex
+The action now includes automatic LaTeX validation using `chktex` before compilation. This helps catch common LaTeX errors and style issues early in the process. If chktex validation fails, the action will stop and report the errors.
+
+### Resume Includes Processing
+If your repository contains a `resume/` directory with `.tex` include files, the action will:
+- Process all `.tex` files in the `resume/` directory
+- Create a consolidated `.tex` artifact that contains your main resume plus all includes
+- Upload both the compiled PDF and the consolidated `.tex` artifact to GitHub releases
+
+This is particularly useful for:
+- Modular resume organization (separate files for skills, experience, projects, etc.)
+- Creating backup copies of your complete resume in a single file
+- Sharing the complete LaTeX source along with the PDF
+
+### Example Directory Structure
+```
+your-resume-repo/
+├── john-doe.tex          # Main resume file
+├── resume/               # Optional includes directory
+│   ├── skills.tex        # Skills section
+│   ├── experience.tex    # Experience section
+│   └── projects.tex      # Projects section
+└── .github/
+    └── workflows/
+        └── resume.yml    # GitHub Action workflow
+```
 
 ## 👨‍💻  Multi-Resume
 
