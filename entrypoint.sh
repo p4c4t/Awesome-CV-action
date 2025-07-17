@@ -42,6 +42,47 @@ main() {
   echo "=====> / INPUTS <====="
   echo ""
 
+  # Run chktex validation first
+  echo "==> RUNNING CHKTEX VALIDATION"
+  set +e
+    chktex -q $INPUT_FILE_NAME
+    if [ ! $? -eq 0 ]; then
+      echo "ERROR : ❌ > CHKTEX VALIDATION FAILED‼️"
+      exit 1
+    else
+      echo "✅   chktex validation passed"
+    fi
+  set -e
+
+  # Process resume/* files and create .tex artifact
+  echo "==> PROCESSING RESUME INCLUDES AND CREATING .TEX ARTIFACT"
+  TEX_ARTIFACT=${INPUT_FILE_NAME/.tex/_artifact.tex}
+  
+  # Copy the main file as the base for the artifact
+  cp $INPUT_FILE_NAME $TEX_ARTIFACT
+  
+  # If resume/ directory exists, process all .tex files in it
+  if [ -d "resume" ]; then
+    echo "Found resume/ directory, processing includes..."
+    
+    # Create a temporary directory for processing
+    mkdir -p temp_resume_processing
+    
+    # Copy all resume files to temp directory for processing
+    cp -r resume/* temp_resume_processing/ 2>/dev/null || true
+    
+    # Find all .tex files in resume/ directory and append them to artifact
+    find resume -name "*.tex" -type f | while read -r resume_file; do
+      echo "% === Content from $resume_file ===" >> $TEX_ARTIFACT
+      cat "$resume_file" >> $TEX_ARTIFACT
+      echo "" >> $TEX_ARTIFACT
+    done
+    
+    echo "✅   Created .tex artifact: $TEX_ARTIFACT"
+  else
+    echo "No resume/ directory found, artifact is copy of main file"
+  fi
+
   set +e
     echo "==> TRYING TO GENERATE THE DOCUMENT"
     xelatex -file-line-error -halt-on-error  -interaction=nonstopmode $INPUT_FILE_NAME
@@ -54,11 +95,11 @@ main() {
   set -e
 
 
-  createRelease $GITHUB_REPOSITORY $GITHUB_TOKEN $TAG_NAME $OUTPUT_FILE
+  createRelease $GITHUB_REPOSITORY $GITHUB_TOKEN $TAG_NAME $OUTPUT_FILE $TEX_ARTIFACT
 
   if usesBoolean "${INPUT_LATEST_TAG}" && usesBoolean "${IS_MASTER}"; then
     cleanLatest $GITHUB_REPOSITORY $GITHUB_TOKEN
-    createRelease $GITHUB_REPOSITORY $GITHUB_TOKEN "latest" $OUTPUT_FILE
+    createRelease $GITHUB_REPOSITORY $GITHUB_TOKEN "latest" $OUTPUT_FILE $TEX_ARTIFACT
   fi
 
    echo "::set-output name=TAG_NAME::${TAG_NAME}" 
@@ -96,16 +137,30 @@ createRelease() {
   responseHandler "$OUTPUT_RELEASE" 
   RELEASE_ID=$(echo $OUTPUT_RELEASE | jq -r '.id')
 
-  echo "====> UPLOAD ASSET TO RELEASE $RELEASE_ID ($3)"
+  # Upload PDF file
+  echo "====> UPLOAD PDF ASSET TO RELEASE $RELEASE_ID ($3)"
   UPLOAD_URL="https://uploads.github.com/repos/$1/releases/$RELEASE_ID/assets?name=$4"
   OUTPUT_UPLOAD=$(curl -sS -X POST --header "authorization: token $2" --header 'content-type: application/pdf' --url $UPLOAD_URL -F "data=@$4")
   responseHandler "$OUTPUT_UPLOAD" 
 
-  ASSET_URL="https://github.com/$1/releases/download/$3/$4"
+  PDF_ASSET_URL="https://github.com/$1/releases/download/$3/$4"
+
+  # Upload TEX artifact file if provided
+  if [ ! -z "${5}" ] && [ -f "${5}" ]; then
+    echo "====> UPLOAD TEX ARTIFACT TO RELEASE $RELEASE_ID ($3)"
+    TEX_UPLOAD_URL="https://uploads.github.com/repos/$1/releases/$RELEASE_ID/assets?name=$5"
+    TEX_OUTPUT_UPLOAD=$(curl -sS -X POST --header "authorization: token $2" --header 'content-type: application/x-tex' --url $TEX_UPLOAD_URL -F "data=@$5")
+    responseHandler "$TEX_OUTPUT_UPLOAD" 
+    
+    TEX_ASSET_URL="https://github.com/$1/releases/download/$3/$5"
+  fi
 
   ROCKET_EMOJI="🚀"
 
-  echo -e "=====> $ROCKET_EMOJI -> Your Document is available at the addres $ASSET_URL"
+  echo -e "=====> $ROCKET_EMOJI -> Your Document is available at the address $PDF_ASSET_URL"
+  if [ ! -z "${5}" ] && [ -f "${5}" ]; then
+    echo -e "=====> $ROCKET_EMOJI -> Your TEX artifact is available at the address $TEX_ASSET_URL"
+  fi
 }
 
 responseHandler() {

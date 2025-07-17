@@ -3,8 +3,8 @@ FROM danteev/texlive
 RUN \
     echo "===> Update repositories" && \
     apt-get update && \
-    echo "===> Install jq and curl" && \
-    apt-get install -y curl jq && \
+    echo "===> Install jq, curl and chktex" && \
+    apt-get install -y curl jq chktex && \
     echo "===> Clean up" && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
