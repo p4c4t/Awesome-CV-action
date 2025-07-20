@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
-    - uses: olivierodo/awesome-cv-action@0.0.2
+    - uses: p4c4t/awesome-cv-action@latest
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -66,7 +66,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
-    - uses: olivierodo/awesome-cv-action@0.0.2
+    - uses: p4c4t/awesome-cv-action@latest
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -74,8 +74,6 @@ jobs:
         LATEST_TAG: 'false' # set to false if you don't want an auto tag of latest (default: true)
 
 ```
-
-A simple example accessible on my repository: https://github.com/olivierodo/Awesome-CV
 
 ## ✨ Enhanced Features
 
@@ -112,32 +110,12 @@ If you would like get all the chance in on your side while you apply for a job y
 Then with this action is very easy :) all you need is to create a new branch. And then everytime you will commit a change a new tag will be created.
 
 
-## 🎄 Influence
+## 🎄 Credits
 
-A few years ago i already created this pipeline automation through Github app, Heroku and https://latexonline.cc. (https://github.com/olivierodo/gh-cv-assistant)
-That was a complicated setup... It helped me a lot to keep my resume update to date and accessible (i just love to send the link of the pdf hosted on github when someone is asking for my resume 😇)
-No i more that happy to propose a simple version using Github Action. It's all what i needed to simplify this workflow!
+This action is based on the original work by [Olivier Rodomond](https://github.com/olivierodo). The pipeline automation concept was initially developed using Github apps and Heroku with https://latexonline.cc, but this GitHub Action version provides a much simpler setup.
 
 ### ⭐️ References
 
-* [Awesome-CV](https://github.com/posquit0/Awesome-CV) 
-* [Old version using Github app](https://github.com/olivierodo/gh-cv-assistant) 
-* [My Resume](https://github.com/olivierodo/Awesome-CV) (I'm open to job proposal!)
-
-
-### Keywords
-
-* automation
-* Continuous integration
-* Resume
-* Job
-* Awesome CV
-* CV
-* Latex
-* RestQA
-
-### Promo (RestQA)
-
-RestQA is the Best in Class Microservice Test Automation Framework.
-[Give a try](https://github.com/restqa/restqa) 🚀
+* [Awesome-CV](https://github.com/posquit0/Awesome-CV) - The original LaTeX template by posquit0
+* [Original Action](https://github.com/olivierodo/awesome-cv-action) - Created by Olivier Rodomond
 
