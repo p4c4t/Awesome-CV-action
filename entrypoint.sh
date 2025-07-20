@@ -6,7 +6,7 @@ main() {
   echo "" # see https://github.com/actions/toolkit/issues/168
 
   sanitize "${GITHUB_TOKEN}" "GITHUB_TOKEN"
-  sanitize "${INPUT_FILE_NAME}" "INPUT_FILE_NAME"
+  # INPUT_FILE_NAME is now optional - if not provided, we'll compile all .tex files in root
 
   arrBRANCH_NAME=(${GITHUB_REF//// })
   BRANCH_NAME=${arrBRANCH_NAME[@]:(-1)} 
@@ -20,25 +20,40 @@ main() {
     TAG_NAME=${BRANCH_NAME}_${TAG_NAME}
   fi
 
+  # Determine which .tex files to process
+  if [ ! -z "${INPUT_FILE_NAME}" ]; then
+    # Single file mode (backward compatibility)
+    TEX_FILES=("$INPUT_FILE_NAME")
+    echo "Single file mode: processing $INPUT_FILE_NAME"
+  else
+    # Multi-file mode: find all .tex files in root directory
+    mapfile -t TEX_FILES < <(find . -maxdepth 1 -name "*.tex" -type f | sed 's|^\./||')
+    if [ ${#TEX_FILES[@]} -eq 0 ]; then
+      echo "ERROR: No .tex files found in repository root"
+      exit 1
+    fi
+    echo "Multi-file mode: found ${#TEX_FILES[@]} .tex files: ${TEX_FILES[*]}"
+  fi
+
   INPUT_EXTENSION="tex"
   OUTPUT_EXTENSION="pdf"
-  OUTPUT_FILE=${INPUT_FILE_NAME/$INPUT_EXTENSION/$OUTPUT_EXTENSION}
 
   if ! uses "${INPUT_LATEST_TAG}"; then
     INPUT_LATEST_TAG="true"
   fi
 
-
-
   echo "=====> INPUTS <====="
-  echo "FILE_NAME: $INPUT_FILE_NAME"
+  if [ ! -z "${INPUT_FILE_NAME}" ]; then
+    echo "FILE_NAME: $INPUT_FILE_NAME"
+  else
+    echo "TEX_FILES: ${TEX_FILES[*]}"
+  fi
   echo "GENERATED TAG_NAME: $TAG_NAME"
   echo "GITHUB REPOSITORY: $GITHUB_REPOSITORY"
   echo "BRANCH: $BRANCH_NAME"
   echo "IS_MASTER: $IS_MASTER"
   echo "INPUT_EXTENSION: $INPUT_EXTENSION"
   echo "OUTPUT_EXTENSION: $OUTPUT_EXTENSION"
-  echo "OUTPUT_FILE: $OUTPUT_FILE"
   echo "GITHUB_EVENT_NAME: ${GITHUB_EVENT_NAME:-'not set'}"
   echo "GITHUB_WORKFLOW: ${GITHUB_WORKFLOW:-'not set'}"
   echo "GITHUB_HEAD_REF: ${GITHUB_HEAD_REF:-'not set'}"
@@ -49,61 +64,80 @@ main() {
   # Run chktex validation first
   echo "==> RUNNING CHKTEX VALIDATION"
   set +e
-    chktex -q $INPUT_FILE_NAME
+  for tex_file in "${TEX_FILES[@]}"; do
+    echo "Validating $tex_file..."
+    chktex -q "$tex_file"
     if [ ! $? -eq 0 ]; then
-      echo "ERROR : ❌ > CHKTEX VALIDATION FAILED‼️"
+      echo "ERROR : ❌ > CHKTEX VALIDATION FAILED FOR $tex_file ‼️"
       exit 1
     else
-      echo "✅   chktex validation passed"
+      echo "✅   chktex validation passed for $tex_file"
     fi
+  done
   set -e
 
-  # Process resume/* files and create .tex artifact
-  echo "==> PROCESSING RESUME INCLUDES AND CREATING .TEX ARTIFACT"
-  TEX_ARTIFACT=${INPUT_FILE_NAME/.tex/_artifact.tex}
+  # Process resume/* files and create .tex artifacts
+  echo "==> PROCESSING RESUME INCLUDES AND CREATING .TEX ARTIFACTS"
   
-  # Copy the main file as the base for the artifact
-  cp $INPUT_FILE_NAME $TEX_ARTIFACT
+  declare -a TEX_ARTIFACTS=()
   
-  # If resume/ directory exists, process all .tex files in it
-  if [ -d "resume" ]; then
-    echo "Found resume/ directory, processing includes..."
+  for tex_file in "${TEX_FILES[@]}"; do
+    TEX_ARTIFACT=${tex_file/.tex/_artifact.tex}
+    TEX_ARTIFACTS+=("$TEX_ARTIFACT")
     
-    # Create a temporary directory for processing
-    mkdir -p temp_resume_processing
+    # Copy the main file as the base for the artifact
+    cp "$tex_file" "$TEX_ARTIFACT"
     
-    # Copy all resume files to temp directory for processing
-    cp -r resume/* temp_resume_processing/ 2>/dev/null || true
-    
-    # Find all .tex files in resume/ directory and append them to artifact
-    find resume -name "*.tex" -type f | while read -r resume_file; do
-      echo "% === Content from $resume_file ===" >> $TEX_ARTIFACT
-      cat "$resume_file" >> $TEX_ARTIFACT
-      echo "" >> $TEX_ARTIFACT
-    done
-    
-    echo "✅   Created .tex artifact: $TEX_ARTIFACT"
-  else
-    echo "No resume/ directory found, artifact is copy of main file"
-  fi
+    # If resume/ directory exists, process all .tex files in it
+    if [ -d "resume" ]; then
+      echo "Found resume/ directory, processing includes for $tex_file..."
+      
+      # Create a temporary directory for processing
+      mkdir -p temp_resume_processing
+      
+      # Copy all resume files to temp directory for processing
+      cp -r resume/* temp_resume_processing/ 2>/dev/null || true
+      
+      # Find all .tex files in resume/ directory and append them to artifact
+      find resume -name "*.tex" -type f | while read -r resume_file; do
+        echo "% === Content from $resume_file ===" >> "$TEX_ARTIFACT"
+        cat "$resume_file" >> "$TEX_ARTIFACT"
+        echo "" >> "$TEX_ARTIFACT"
+      done
+      
+      echo "✅   Created .tex artifact: $TEX_ARTIFACT"
+    else
+      echo "No resume/ directory found, artifact for $tex_file is copy of main file"
+    fi
+  done
 
+  # Compile all .tex files
+  echo "==> TRYING TO GENERATE THE DOCUMENTS"
+  
+  declare -a OUTPUT_FILES=()
+  
   set +e
-    echo "==> TRYING TO GENERATE THE DOCUMENT"
-    xelatex -file-line-error -halt-on-error  -interaction=nonstopmode $INPUT_FILE_NAME
+  for tex_file in "${TEX_FILES[@]}"; do
+    OUTPUT_FILE=${tex_file/$INPUT_EXTENSION/$OUTPUT_EXTENSION}
+    OUTPUT_FILES+=("$OUTPUT_FILE")
+    
+    echo "Compiling $tex_file to $OUTPUT_FILE..."
+    xelatex -file-line-error -halt-on-error -interaction=nonstopmode "$tex_file"
     if [ ! $? -eq 0 ]; then
-      echo "ERROR : ❌ > THE PDF DOCUMENT CAN'T BE GENERATED‼️"
+      echo "ERROR : ❌ > THE PDF DOCUMENT $OUTPUT_FILE CAN'T BE GENERATED‼️"
       exit 1
     else
       echo "✅   $OUTPUT_FILE was successfully generated"
     fi
+  done
   set -e
 
 
-  createRelease $GITHUB_REPOSITORY $GITHUB_TOKEN $TAG_NAME $OUTPUT_FILE $TEX_ARTIFACT
+  createRelease $GITHUB_REPOSITORY $GITHUB_TOKEN $TAG_NAME "${OUTPUT_FILES[@]}" "${TEX_ARTIFACTS[@]}"
 
   if usesBoolean "${INPUT_LATEST_TAG}" && usesBoolean "${IS_MASTER}"; then
     cleanLatest $GITHUB_REPOSITORY $GITHUB_TOKEN
-    createRelease $GITHUB_REPOSITORY $GITHUB_TOKEN "latest" $OUTPUT_FILE $TEX_ARTIFACT
+    createRelease $GITHUB_REPOSITORY $GITHUB_TOKEN "latest" "${OUTPUT_FILES[@]}" "${TEX_ARTIFACTS[@]}"
   fi
 
    echo "::set-output name=TAG_NAME::${TAG_NAME}" 
@@ -122,11 +156,24 @@ cleanLatest() {
 }
 
 createRelease() {
+  local repo="$1"
+  local token="$2"
+  local tag_name="$3"
+  shift 3
   
-  echo "==> CREATE TAG $3"
-  OUTPUT_TAG="$(curl -sS -X POST --url https://api.github.com/repos/$1/git/refs --header "authorization: token $2" --header 'content-type: application/json' \
+  # Collect all remaining arguments as files
+  local all_args=("$@")
+  local num_args=${#all_args[@]}
+  local mid_point=$((num_args / 2))
+  
+  # Split args into PDF files and TEX artifacts
+  local pdf_files=("${all_args[@]:0:$mid_point}")
+  local tex_files=("${all_args[@]:$mid_point}")
+  
+  echo "==> CREATE TAG $tag_name"
+  OUTPUT_TAG="$(curl -sS -X POST --url https://api.github.com/repos/$repo/git/refs --header "authorization: token $token" --header 'content-type: application/json' \
   --data '{
-    "ref": "refs/tags/'"$3"'",
+    "ref": "refs/tags/'"$tag_name"'",
     "sha": "'"$GITHUB_SHA"'"
   }')"
   responseHandler "$OUTPUT_TAG" 
@@ -141,8 +188,9 @@ createRelease() {
 
 **Generated:** $(date +%m-%d-%Y\ at\ %H:%M\ UTC)
 **Branch:** $BRANCH_NAME
-**Commit:** [\`$COMMIT_SHA_SHORT\`](https://github.com/$1/commit/$GITHUB_SHA)
+**Commit:** [\`$COMMIT_SHA_SHORT\`](https://github.com/$repo/commit/$GITHUB_SHA)
 **Author:** $COMMIT_AUTHOR
+**Files processed:** ${#pdf_files[@]}
 
 **Latest Changes:**
 \`$COMMIT_MESSAGE\`"
@@ -166,40 +214,39 @@ createRelease() {
 **Workflow:** $GITHUB_WORKFLOW"
   fi
 
-  echo "===> CREATE RELEASE $3"
-  OUTPUT_RELEASE="$(curl -sS -X POST --url https://api.github.com/repos/$1/releases --header "authorization: token $2" --header 'content-type: application/json' \
+  echo "===> CREATE RELEASE $tag_name"
+  OUTPUT_RELEASE="$(curl -sS -X POST --url https://api.github.com/repos/$repo/releases --header "authorization: token $token" --header 'content-type: application/json' \
   --data '{
-    "tag_name": "'"$3"'",
-    "name": "'"$3"'",
+    "tag_name": "'"$tag_name"'",
+    "name": "'"$tag_name"'",
     "body": "'"$(echo "$RELEASE_BODY" | sed 's/"/\\"/g' | tr '\n' '\\' | sed 's/\\/\\n/g')"'"
   }')"
   responseHandler "$OUTPUT_RELEASE" 
   RELEASE_ID=$(echo $OUTPUT_RELEASE | jq -r '.id')
 
-  # Upload PDF file
-  echo "====> UPLOAD PDF ASSET TO RELEASE $RELEASE_ID ($3)"
-  UPLOAD_URL="https://uploads.github.com/repos/$1/releases/$RELEASE_ID/assets?name=$4"
-  OUTPUT_UPLOAD=$(curl -sS -X POST --header "authorization: token $2" --header 'content-type: application/pdf' --url $UPLOAD_URL -F "data=@$4")
-  responseHandler "$OUTPUT_UPLOAD" 
-
-  PDF_ASSET_URL="https://github.com/$1/releases/download/$3/$4"
-
-  # Upload TEX artifact file if provided
-  if [ ! -z "${5}" ] && [ -f "${5}" ]; then
-    echo "====> UPLOAD TEX ARTIFACT TO RELEASE $RELEASE_ID ($3)"
-    TEX_UPLOAD_URL="https://uploads.github.com/repos/$1/releases/$RELEASE_ID/assets?name=$5"
-    TEX_OUTPUT_UPLOAD=$(curl -sS -X POST --header "authorization: token $2" --header 'content-type: application/x-tex' --url $TEX_UPLOAD_URL -F "data=@$5")
-    responseHandler "$TEX_OUTPUT_UPLOAD" 
+  # Upload all PDF files
+  for pdf_file in "${pdf_files[@]}"; do
+    echo "====> UPLOAD PDF ASSET TO RELEASE $RELEASE_ID ($tag_name): $pdf_file"
+    UPLOAD_URL="https://uploads.github.com/repos/$repo/releases/$RELEASE_ID/assets?name=$pdf_file"
+    OUTPUT_UPLOAD=$(curl -sS -X POST --header "authorization: token $token" --header 'content-type: application/pdf' --url $UPLOAD_URL -F "data=@$pdf_file")
+    responseHandler "$OUTPUT_UPLOAD" 
     
-    TEX_ASSET_URL="https://github.com/$1/releases/download/$3/$5"
-  fi
+    PDF_ASSET_URL="https://github.com/$repo/releases/download/$tag_name/$pdf_file"
+    echo -e "=====> 🚀 -> Your PDF $pdf_file is available at $PDF_ASSET_URL"
+  done
 
-  ROCKET_EMOJI="🚀"
-
-  echo -e "=====> $ROCKET_EMOJI -> Your Document is available at the address $PDF_ASSET_URL"
-  if [ ! -z "${5}" ] && [ -f "${5}" ]; then
-    echo -e "=====> $ROCKET_EMOJI -> Your TEX artifact is available at the address $TEX_ASSET_URL"
-  fi
+  # Upload all TEX artifact files
+  for tex_file in "${tex_files[@]}"; do
+    if [ ! -z "${tex_file}" ] && [ -f "${tex_file}" ]; then
+      echo "====> UPLOAD TEX ARTIFACT TO RELEASE $RELEASE_ID ($tag_name): $tex_file"
+      TEX_UPLOAD_URL="https://uploads.github.com/repos/$repo/releases/$RELEASE_ID/assets?name=$tex_file"
+      TEX_OUTPUT_UPLOAD=$(curl -sS -X POST --header "authorization: token $token" --header 'content-type: application/x-tex' --url $TEX_UPLOAD_URL -F "data=@$tex_file")
+      responseHandler "$TEX_OUTPUT_UPLOAD" 
+      
+      TEX_ASSET_URL="https://github.com/$repo/releases/download/$tag_name/$tex_file"
+      echo -e "=====> 🚀 -> Your TEX artifact $tex_file is available at $TEX_ASSET_URL"
+    fi
+  done
 }
 
 responseHandler() {
