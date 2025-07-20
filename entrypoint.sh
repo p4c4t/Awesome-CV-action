@@ -39,6 +39,10 @@ main() {
   echo "INPUT_EXTENSION: $INPUT_EXTENSION"
   echo "OUTPUT_EXTENSION: $OUTPUT_EXTENSION"
   echo "OUTPUT_FILE: $OUTPUT_FILE"
+  echo "GITHUB_EVENT_NAME: ${GITHUB_EVENT_NAME:-'not set'}"
+  echo "GITHUB_WORKFLOW: ${GITHUB_WORKFLOW:-'not set'}"
+  echo "GITHUB_HEAD_REF: ${GITHUB_HEAD_REF:-'not set'}"
+  echo "GITHUB_BASE_REF: ${GITHUB_BASE_REF:-'not set'}"
   echo "=====> / INPUTS <====="
   echo ""
 
@@ -127,12 +131,47 @@ createRelease() {
   }')"
   responseHandler "$OUTPUT_TAG" 
 
+  # Gather comprehensive release information
+  COMMIT_MESSAGE=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "No commit message available")
+  COMMIT_AUTHOR=$(git log -1 --pretty=format:"%an" 2>/dev/null || echo "Unknown author")
+  COMMIT_SHA_SHORT=$(echo $GITHUB_SHA | cut -c1-7)
+  
+  # Build comprehensive release body
+  RELEASE_BODY="📄 **Resume Build Information**
+
+**Generated:** $(date +%m-%d-%Y\ at\ %H:%M\ UTC)
+**Branch:** $BRANCH_NAME
+**Commit:** [\`$COMMIT_SHA_SHORT\`](https://github.com/$1/commit/$GITHUB_SHA)
+**Author:** $COMMIT_AUTHOR
+
+**Latest Changes:**
+\`$COMMIT_MESSAGE\`"
+
+  # Add additional context if available from GitHub event
+  if [ ! -z "$GITHUB_EVENT_NAME" ]; then
+    RELEASE_BODY="$RELEASE_BODY
+
+**Trigger:** $GITHUB_EVENT_NAME"
+  fi
+
+  # Add pull request information if available
+  if [ ! -z "$GITHUB_HEAD_REF" ] && [ ! -z "$GITHUB_BASE_REF" ]; then
+    RELEASE_BODY="$RELEASE_BODY
+**Pull Request:** $GITHUB_HEAD_REF → $GITHUB_BASE_REF"
+  fi
+
+  # Add workflow information
+  if [ ! -z "$GITHUB_WORKFLOW" ]; then
+    RELEASE_BODY="$RELEASE_BODY
+**Workflow:** $GITHUB_WORKFLOW"
+  fi
+
   echo "===> CREATE RELEASE $3"
   OUTPUT_RELEASE="$(curl -sS -X POST --url https://api.github.com/repos/$1/releases --header "authorization: token $2" --header 'content-type: application/json' \
   --data '{
     "tag_name": "'"$3"'",
     "name": "'"$3"'",
-    "body": "Document generated at '"$(date +%m-%d-%Y.%H:%M)"'"
+    "body": "'"$(echo "$RELEASE_BODY" | sed 's/"/\\"/g' | tr '\n' '\\' | sed 's/\\/\\n/g')"'"
   }')"
   responseHandler "$OUTPUT_RELEASE" 
   RELEASE_ID=$(echo $OUTPUT_RELEASE | jq -r '.id')
