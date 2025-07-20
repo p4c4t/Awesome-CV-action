@@ -27,8 +27,9 @@ A simple pipeline supports 6 steps for you:
 
 ## 🚀 Usage
 
-
 First you will need to have add the action to a repository forked from [Awesome-CV](https://github.com/posquit0/Awesome-CV) 
+
+### Single File Mode (Backward Compatible)
 
 If your resume filename is `john-doe.tex`, run it like this:
 
@@ -54,7 +55,37 @@ jobs:
 
 ```
 
-### Creates 1 tags (v[YYDDMM.HH.MM])
+### Multi-File Mode (Compile All .tex Files)
+
+To compile **all** .tex files in the repository root, simply omit the `FILE_NAME` parameter:
+
+```yaml
+name: Awesome-CV-CI
+
+on: [push]
+
+jobs:
+  awesome-cv-job:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: p4c4t/awesome-cv-action@latest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # No FILE_NAME specified - will compile all .tex files in root
+
+```
+
+This mode will:
+- Find all `.tex` files in the repository root directory 
+- Validate each file with chktex
+- Compile each file into a separate PDF
+- Create a single release containing all generated PDFs and .tex artifacts
+- Process any `resume/` includes for each file
+
+**Note:** Multi-file mode only processes `.tex` files in the root directory, not in subdirectories.
+
+### Creates 1 tags (v[YYDDMM.HH.MM]) - Single File
 
 ```yaml
 name: Awesome-CV-CI
@@ -92,10 +123,27 @@ This is particularly useful for:
 - Sharing the complete LaTeX source along with the PDF
 
 ### Example Directory Structure
+
+**Single File Mode:**
 ```
 your-resume-repo/
 ├── john-doe.tex          # Main resume file
 ├── resume/               # Optional includes directory
+│   ├── skills.tex        # Skills section
+│   ├── experience.tex    # Experience section
+│   └── projects.tex      # Projects section
+└── .github/
+    └── workflows/
+        └── resume.yml    # GitHub Action workflow
+```
+
+**Multi-File Mode:**
+```
+your-resume-repo/
+├── resume-engineer.tex   # Engineering resume
+├── resume-manager.tex    # Management resume
+├── cv-academic.tex       # Academic CV
+├── resume/               # Optional includes directory (applied to all files)
 │   ├── skills.tex        # Skills section
 │   ├── experience.tex    # Experience section
 │   └── projects.tex      # Projects section

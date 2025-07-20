@@ -6,8 +6,8 @@ branding:
 description: 'Automate your Awesome CV resume and keep it up to date.'
 inputs:
   FILE_NAME:
-    description: 'The filename of your latex document within your repository (Ex: resume.tex)'
-    required: true
+    description: 'The filename of your latex document within your repository (Ex: resume.tex). If not provided, all .tex files in the repository root will be compiled.'
+    required: false
   LATEST_TAG:
     description: 'Define if you want the action to create a latest tag, allowing you to the latest document though a single tag named "latest" (default: true)'
     required: true
