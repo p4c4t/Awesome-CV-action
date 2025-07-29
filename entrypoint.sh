@@ -140,7 +140,7 @@ main() {
     createRelease $GITHUB_REPOSITORY $GITHUB_TOKEN "latest" "${OUTPUT_FILES[@]}" "${TEX_ARTIFACTS[@]}"
   fi
 
-   echo "::set-output name=TAG_NAME::${TAG_NAME}" 
+   echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT 
 
 }
 
