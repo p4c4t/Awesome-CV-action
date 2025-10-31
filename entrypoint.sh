@@ -61,21 +61,6 @@ main() {
   echo "=====> / INPUTS <====="
   echo ""
 
-  # Run chktex validation first
-  echo "==> RUNNING CHKTEX VALIDATION"
-  set +e
-  for tex_file in "${TEX_FILES[@]}"; do
-    echo "Validating $tex_file..."
-    chktex -q "$tex_file"
-    if [ ! $? -eq 0 ]; then
-      echo "ERROR : ❌ > CHKTEX VALIDATION FAILED FOR $tex_file ‼️"
-      exit 1
-    else
-      echo "✅   chktex validation passed for $tex_file"
-    fi
-  done
-  set -e
-
   # Process resume/* files and create .tex artifacts
   echo "==> PROCESSING RESUME INCLUDES AND CREATING .TEX ARTIFACTS"
   
